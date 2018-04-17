@@ -1,0 +1,993 @@
+Index: server_extensions_extra/src/main/java/com/generalbytes/batm/server/extensions/extra/futurocoin/sources/FixPriceRateSource.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- server_extensions_extra/src/main/java/com/generalbytes/batm/server/extensions/extra/futurocoin/sources/FixPriceRateSource.java	(date 1523889467000)
++++ server_extensions_extra/src/main/java/com/generalbytes/batm/server/extensions/extra/futurocoin/sources/FixPriceRateSource.java	(date 1523889467000)
+@@ -0,0 +1,50 @@
++package com.generalbytes.batm.server.extensions.extra.futurocoin.sources;
++
++import com.generalbytes.batm.server.extensions.ICurrencies;
++import com.generalbytes.batm.server.extensions.IRateSource;
++
++import java.math.BigDecimal;
++import java.util.HashSet;
++import java.util.Set;
++
++/**
++ * Created by woolly_sammoth on 11/12/14.
++ */
++public class FixPriceRateSource implements IRateSource {
++    private BigDecimal rate = BigDecimal.ZERO;
++
++    private String preferedFiatCurrency = ICurrencies.USD;
++
++    public FixPriceRateSource(BigDecimal rate, String preferedFiatCurrency) {
++        this.rate = rate;
++        if (ICurrencies.USD.equalsIgnoreCase(preferedFiatCurrency)) {
++            this.preferedFiatCurrency = ICurrencies.USD;
++        }
++    }
++
++    @Override
++    public Set<String> getCryptoCurrencies() {
++        Set<String> result = new HashSet<String>();
++        result.add(ICurrencies.FTO);
++        return result;
++    }
++
++    @Override
++    public BigDecimal getExchangeRateLast(String cryptoCurrency, String fiatCurrency) {
++        if (ICurrencies.FTO.equalsIgnoreCase(cryptoCurrency)) {
++            return rate;
++        }
++        return null;
++    }
++
++    @Override
++    public Set<String> getFiatCurrencies() {
++        Set<String> result = new HashSet<String>();
++        result.add(ICurrencies.USD);
++        return result;
++    }
++    @Override
++    public String getPreferredFiatCurrency() {
++        return preferedFiatCurrency;
++    }
++}
+Index: server_extensions_extra/src/main/java/com/generalbytes/batm/server/extensions/extra/futurocoin/FuturocoinExtension.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- server_extensions_extra/src/main/java/com/generalbytes/batm/server/extensions/extra/futurocoin/FuturocoinExtension.java	(date 1523952620000)
++++ server_extensions_extra/src/main/java/com/generalbytes/batm/server/extensions/extra/futurocoin/FuturocoinExtension.java	(date 1523952620000)
+@@ -0,0 +1,133 @@
++/*************************************************************************************
++ * Copyright (C) 2014-2016 GENERAL BYTES s.r.o. All rights reserved.
++ *
++ * This software may be distributed and modified under the terms of the GNU
++ * General Public License version 2 (GPL2) as published by the Free Software
++ * Foundation and appearing in the file GPL2.TXT included in the packaging of
++ * this file. Please note that GPL2 Section 2[b] requires that all works based
++ * on this software must also be made publicly available under the terms of
++ * the GPL2 ("Copyleft").
++ *
++ * Contact information
++ * -------------------
++ *
++ * GENERAL BYTES s.r.o.
++ * Web      :  http://www.generalbytes.com
++ *
++ ************************************************************************************/
++package com.generalbytes.batm.server.extensions.extra.futurocoin;
++
++import com.generalbytes.batm.server.extensions.*;
++import com.generalbytes.batm.server.extensions.extra.futurocoin.sources.FixPriceRateSource;
++import com.generalbytes.batm.server.extensions.extra.futurocoin.sources.yobit.YobitRateSource;
++import com.generalbytes.batm.server.extensions.extra.futurocoin.wallets.futurocoind.FuturocoinRPCWallet;
++import com.generalbytes.batm.server.extensions.watchlist.IWatchList;
++
++import java.math.BigDecimal;
++import java.util.HashSet;
++import java.util.Set;
++import java.util.StringTokenizer;
++
++//import com.generalbytes.batm.server.extensions.extra.dogecoin.sources.chainso.ChainSoRateSource;
++//import com.generalbytes.batm.server.extensions.extra.dogecoin.wallets.blockio.BlockIOWallet;
++
++public class FuturocoinExtension implements IExtension{
++    @Override
++    public String getName() {
++        return "BATM Futurocoin extra extension";
++    }
++
++    @Override
++    public IExchange createExchange(String exchangeLogin) {
++        return null;
++    }
++
++    @Override
++    public IPaymentProcessor createPaymentProcessor(String paymentProcessorLogin) {
++        return null; //no payment processors available
++    }
++
++    @Override
++    public IWallet createWallet(String walletLogin) {
++        if (walletLogin !=null && !walletLogin.trim().isEmpty()) {
++            StringTokenizer st = new StringTokenizer(walletLogin,":");
++            String walletType = st.nextToken();
++
++            if ("futurocoind".equalsIgnoreCase(walletType)) {
++                String protocol = st.nextToken();
++                String username = st.nextToken();
++                String password = st.nextToken();
++                String hostname = st.nextToken();
++                String port = st.nextToken();
++                String accountName ="";
++                if (st.hasMoreTokens()) {
++                    accountName = st.nextToken();
++                }
++
++
++                if (protocol != null && username != null && password != null && hostname !=null && port != null && accountName != null) {
++                    String rpcURL = protocol +"://" + username +":" + password + "@" + hostname +":" + port;
++                    return new FuturocoinRPCWallet(rpcURL,accountName);
++                }
++            }
++
++        }
++        return null;
++    }
++
++    @Override
++    public ICryptoAddressValidator createAddressValidator(String cryptoCurrency) {
++        if (ICurrencies.FTO.equalsIgnoreCase(cryptoCurrency)) {
++            return new FuturocoinAddressValidator();
++        }
++        return null;
++    }
++
++    @Override
++    public IPaperWalletGenerator createPaperWalletGenerator(String cryptoCurrency) {
++        return null;
++    }
++
++    @Override
++    public IRateSource createRateSource(String sourceLogin) {
++        if (sourceLogin != null && !sourceLogin.trim().isEmpty()) {
++            StringTokenizer st = new StringTokenizer(sourceLogin, ":");
++            String exchangeType = st.nextToken();
++
++            if ("futurocoinfix".equalsIgnoreCase(exchangeType)) {
++                BigDecimal rate = BigDecimal.ZERO;
++                if (st.hasMoreTokens()) {
++                    try {
++                        rate = new BigDecimal(st.nextToken());
++                    } catch (Throwable e) {
++                    }
++                }
++                String preferedFiatCurrency = ICurrencies.USD;
++                if (st.hasMoreTokens()) {
++                    preferedFiatCurrency = st.nextToken().toUpperCase();
++                }
++                return new FixPriceRateSource(rate, preferedFiatCurrency);
++            } else if ("yobit".equalsIgnoreCase(exchangeType)) {
++                return new YobitRateSource();
++            }
++        }
++        return null;
++    }
++
++    @Override
++    public Set<String> getSupportedCryptoCurrencies() {
++        Set<String> result = new HashSet<String>();
++        result.add(ICurrencies.FTO);
++        return result;
++    }
++
++    @Override
++    public Set<String> getSupportedWatchListsNames() {
++        return null;
++    }
++
++    @Override
++    public IWatchList getWatchList(String name) {
++        return null;
++    }
++}
+Index: server_extensions_extra/src/main/java/com/generalbytes/batm/server/extensions/extra/futurocoin/wallets/futurocoind/FuturocoinRPCWallet.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- server_extensions_extra/src/main/java/com/generalbytes/batm/server/extensions/extra/futurocoin/wallets/futurocoind/FuturocoinRPCWallet.java	(date 1523881865000)
++++ server_extensions_extra/src/main/java/com/generalbytes/batm/server/extensions/extra/futurocoin/wallets/futurocoind/FuturocoinRPCWallet.java	(date 1523881865000)
+@@ -0,0 +1,100 @@
++package com.generalbytes.batm.server.extensions.extra.futurocoin.wallets.futurocoind;
++
++import com.azazar.bitcoin.jsonrpcclient.BitcoinException;
++import com.azazar.bitcoin.jsonrpcclient.BitcoinJSONRPCClient;
++import com.generalbytes.batm.server.extensions.ICurrencies;
++import com.generalbytes.batm.server.extensions.IWallet;
++import java.math.BigDecimal;
++import java.net.MalformedURLException;
++import java.util.HashSet;
++import java.util.List;
++import java.util.Set;
++
++public class FuturocoinRPCWallet implements IWallet {
++
++    private static final Logger log = LoggerFactory.getLogger(FuturocoinRPCWallet.class);
++    private static final String CRYPTO_CURRENCY = ICurrencies.FTO;
++
++    public FuturocoinRPCWallet(String rpcURL, String accountName) {
++        this.rpcURL = rpcURL;
++        this.accountName = accountName;
++    }
++
++    private String rpcURL;
++    private String accountName;
++
++    @Override
++    public Set<String> getCryptoCurrencies() {
++        Set<String> result = new HashSet<String>();
++        result.add(CRYPTO_CURRENCY);
++        return result;
++
++    }
++
++    @Override
++    public String getPreferredCryptoCurrency() {
++        return CRYPTO_CURRENCY;
++    }
++
++    @Override
++    public String sendCoins(String destinationAddress, BigDecimal amount, String cryptoCurrency, String description) {
++        if (!CRYPTO_CURRENCY.equalsIgnoreCase(cryptoCurrency)) {
++            log.error("Futurocoind wallet error: unknown cryptocurrency.");
++            return null;
++        }
++
++        log.info("Futurocoind sending coins from " + accountName + " to: " + destinationAddress + " " + amount);
++        try {
++            String result = getClient(rpcURL).sendFrom(accountName, destinationAddress,amount.doubleValue());
++            log.debug("result = " + result);
++            return result;
++        } catch (BitcoinException e) {
++            e.printStackTrace();
++            return null;
++        }
++    }
++
++    @Override
++    public String getCryptoAddress(String cryptoCurrency) {
++        if (!CRYPTO_CURRENCY.equalsIgnoreCase(cryptoCurrency)) {
++            log.error("Futurocoind wallet error: unknown cryptocurrency.");
++            return null;
++        }
++
++        try {
++            List<String> addressesByAccount = getClient(rpcURL).getAddressesByAccount(accountName);
++            if (addressesByAccount == null || addressesByAccount.size() == 0) {
++                return null;
++            }else{
++                return addressesByAccount.get(0);
++            }
++        } catch (BitcoinException e) {
++            e.printStackTrace();
++            return null;
++        }
++    }
++
++    @Override
++    public BigDecimal getCryptoBalance(String cryptoCurrency) {
++        if (!CRYPTO_CURRENCY.equalsIgnoreCase(cryptoCurrency)) {
++            log.error("Futurocoind wallet error: unknown cryptocurrency: " + cryptoCurrency);
++            return null;
++        }
++        try {
++            double balance = getClient(rpcURL).getBalance(accountName);
++            return BigDecimal.valueOf(balance);
++        } catch (BitcoinException e) {
++            e.printStackTrace();
++            return null;
++        }
++    }
++
++    private BitcoinJSONRPCClient getClient(String rpcURL) {
++        try {
++            return new BitcoinJSONRPCClient(rpcURL);
++        } catch (MalformedURLException e) {
++            e.printStackTrace();
++        }
++        return null;
++    }
++}
+Index: server_extensions_extra/src/main/java/com/generalbytes/batm/server/extensions/extra/futurocoin/sources/yobit/dto/Ticker.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- server_extensions_extra/src/main/java/com/generalbytes/batm/server/extensions/extra/futurocoin/sources/yobit/dto/Ticker.java	(date 1523949837000)
++++ server_extensions_extra/src/main/java/com/generalbytes/batm/server/extensions/extra/futurocoin/sources/yobit/dto/Ticker.java	(date 1523949837000)
+@@ -0,0 +1,87 @@
++package com.generalbytes.batm.server.extensions.extra.futurocoin.sources.yobit.dto;
++
++import java.math.BigDecimal;
++
++public class Ticker {
++    private BigDecimal high;
++    private BigDecimal low;
++    private BigDecimal avg;
++    private BigDecimal vol;
++    private BigDecimal vol_cur;
++    private BigDecimal last;
++    private BigDecimal buy;
++    private BigDecimal sell;
++    private long updated;
++
++    public BigDecimal getHigh() {
++        return high;
++    }
++
++    public void setHigh(BigDecimal high) {
++        this.high = high;
++    }
++
++    public BigDecimal getLow() {
++        return low;
++    }
++
++    public void setLow(BigDecimal low) {
++        this.low = low;
++    }
++
++    public BigDecimal getAvg() {
++        return avg;
++    }
++
++    public void setAvg(BigDecimal avg) {
++        this.avg = avg;
++    }
++
++    public BigDecimal getVol() {
++        return vol;
++    }
++
++    public void setVol(BigDecimal vol) {
++        this.vol = vol;
++    }
++
++    public BigDecimal getVol_cur() {
++        return vol_cur;
++    }
++
++    public void setVol_cur(BigDecimal vol_cur) {
++        this.vol_cur = vol_cur;
++    }
++
++    public BigDecimal getLast() {
++        return last;
++    }
++
++    public void setLast(BigDecimal last) {
++        this.last = last;
++    }
++
++    public BigDecimal getBuy() {
++        return buy;
++    }
++
++    public void setBuy(BigDecimal buy) {
++        this.buy = buy;
++    }
++
++    public BigDecimal getSell() {
++        return sell;
++    }
++
++    public void setSell(BigDecimal sell) {
++        this.sell = sell;
++    }
++
++    public long getUpdated() {
++        return updated;
++    }
++
++    public void setUpdated(long updated) {
++        this.updated = updated;
++    }
++}
+Index: server_extensions_extra/src/main/java/com/generalbytes/batm/server/extensions/extra/futurocoin/sources/yobit/dto/YobitResponse.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- server_extensions_extra/src/main/java/com/generalbytes/batm/server/extensions/extra/futurocoin/sources/yobit/dto/YobitResponse.java	(date 1523952409000)
++++ server_extensions_extra/src/main/java/com/generalbytes/batm/server/extensions/extra/futurocoin/sources/yobit/dto/YobitResponse.java	(date 1523952409000)
+@@ -0,0 +1,13 @@
++package com.generalbytes.batm.server.extensions.extra.futurocoin.sources.yobit.dto;
++
++public class YobitResponse {
++    private Ticker fot_usd;
++
++    public Ticker getFot_usd() {
++        return fot_usd;
++    }
++
++    public void setFot_usd(Ticker fot_usd) {
++        this.fot_usd = fot_usd;
++    }
++}
+Index: server_extensions_extra/src/main/java/com/generalbytes/batm/server/extensions/extra/futurocoin/sources/yobit/YobitRateSource.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- server_extensions_extra/src/main/java/com/generalbytes/batm/server/extensions/extra/futurocoin/sources/yobit/YobitRateSource.java	(date 1523952409000)
++++ server_extensions_extra/src/main/java/com/generalbytes/batm/server/extensions/extra/futurocoin/sources/yobit/YobitRateSource.java	(date 1523952409000)
+@@ -0,0 +1,49 @@
++package com.generalbytes.batm.server.extensions.extra.futurocoin.sources.yobit;
++
++import com.generalbytes.batm.server.extensions.ICurrencies;
++import com.generalbytes.batm.server.extensions.IRateSource;
++import com.generalbytes.batm.server.extensions.extra.bitcoin.sources.bity.IBity;
++import com.generalbytes.batm.server.extensions.extra.futurocoin.sources.yobit.dto.Ticker;
++import com.generalbytes.batm.server.extensions.extra.futurocoin.sources.yobit.dto.YobitResponse;
++
++import java.math.BigDecimal;
++import java.util.HashSet;
++import java.util.Set;
++
++public class YobitRateSource implements IRateSource {
++
++    private IYobitAPI api;
++
++    public YobitRateSource() {
++        api = RestProxyFactory.createProxy(IBity.class, "https://yobit.net");
++    }
++
++    @Override
++    public Set<String> getCryptoCurrencies() {
++        Set<String> result = new HashSet<String>();
++        result.add(ICurrencies.FTO);
++        return result;
++    }
++
++    @Override
++    public Set<String> getFiatCurrencies() {
++        Set<String> result = new HashSet<String>();
++        result.add(ICurrencies.USD);
++        return result;
++    }
++
++    @Override
++    public BigDecimal getExchangeRateLast(String cryptoCurrency, String fiatCurrency) {
++        if (!getFiatCurrencies().contains(fiatCurrency) || !getCryptoCurrencies().contains(cryptoCurrency)) {
++            return null;
++        }
++
++        YobitResponse response = api.getTicker(cryptoCurrency.toLowerCase(), fiatCurrency.toLowerCase());
++        return response.getFot_usd().getLast();
++    }
++
++    @Override
++    public String getPreferredFiatCurrency() {
++        return ICurrencies.USD;
++    }
++}
+Index: server_extensions_api/src/main/java/com/generalbytes/batm/server/extensions/ICurrencies.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- server_extensions_api/src/main/java/com/generalbytes/batm/server/extensions/ICurrencies.java	(revision 816ad0449738a0d4217f28bb77d5bfdc7cad9c98)
++++ server_extensions_api/src/main/java/com/generalbytes/batm/server/extensions/ICurrencies.java	(date 1523889467000)
+@@ -29,6 +29,7 @@
+     public static final String DASH = "DASH";
+     public static final String DOGE = "DOGE";
+     public static final String FLASH = "FLASH";// FLASH Coin
++    public static final String FTO = "FTO";
+     public static final String MAX = "MAX";
+     public static final String LEO = "LEO";
+     public static final String NLG = "NLG";
+Index: server_extensions_extra/src/main/java/com/generalbytes/batm/server/extensions/extra/futurocoin/sources/yobit/IYobitAPI.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- server_extensions_extra/src/main/java/com/generalbytes/batm/server/extensions/extra/futurocoin/sources/yobit/IYobitAPI.java	(date 1523952409000)
++++ server_extensions_extra/src/main/java/com/generalbytes/batm/server/extensions/extra/futurocoin/sources/yobit/IYobitAPI.java	(date 1523952409000)
+@@ -0,0 +1,18 @@
++package com.generalbytes.batm.server.extensions.extra.futurocoin.sources.yobit;
++
++import com.generalbytes.batm.server.extensions.extra.futurocoin.sources.yobit.dto.Ticker;
++import com.generalbytes.batm.server.extensions.extra.futurocoin.sources.yobit.dto.YobitResponse;
++
++import javax.ws.rs.GET;
++import javax.ws.rs.Path;
++import javax.ws.rs.PathParam;
++import javax.ws.rs.Produces;
++import javax.ws.rs.core.MediaType;
++
++@Path("/api/3/")
++@Produces(MediaType.APPLICATION_JSON)
++public interface IYobitAPI {
++    @GET
++    @Path("ticker/{cryptocurrency}_{fiatcurrency}")
++    YobitResponse getTicker(@PathParam("cryptocurrency") String cryptoCurrency, @PathParam("fiatcurrency") String fiatCurrency);
++}
+\ No newline at end of file
+Index: server_extensions_extra/src/main/java/com/generalbytes/batm/server/extensions/extra/futurocoin/FuturocoinAddressValidator.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- server_extensions_extra/src/main/java/com/generalbytes/batm/server/extensions/extra/futurocoin/FuturocoinAddressValidator.java	(date 1523883049000)
++++ server_extensions_extra/src/main/java/com/generalbytes/batm/server/extensions/extra/futurocoin/FuturocoinAddressValidator.java	(date 1523883049000)
+@@ -0,0 +1,34 @@
++package com.generalbytes.batm.server.extensions.extra.futurocoin;
++
++import com.generalbytes.batm.server.coinutil.AddressFormatException;
++import com.generalbytes.batm.server.coinutil.Base58;
++import com.generalbytes.batm.server.extensions.ICryptoAddressValidator;
++
++public class FuturocoinAddressValidator implements ICryptoAddressValidator {
++
++    @Override
++    public boolean isAddressValid(String address) {
++        if (address.startsWith("F") || address.startsWith("6")) {
++            try {
++                Base58.decodeToBigInteger(address);
++                Base58.decodeChecked(address);
++            } catch (AddressFormatException e) {
++                e.printStackTrace();
++                return false;
++            }
++            return true;
++        }else{
++            return false;
++        }
++    }
++
++    @Override
++    public boolean mustBeBase58Address() {
++        return true;
++    }
++
++    @Override
++    public boolean isPaperWalletSupported() {
++        return false;
++    }
++}
+diff --git server_extensions_extra/src/main/resources/fto.png server_extensions_extra/src/main/resources/fto.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..350b38ac9e76810e6a85498c67957904b55ef064
+GIT binary patch
+literal 22187
+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
+WKF?o~sl$PQ-|d^mx~1BVq5lU+5IK+l
